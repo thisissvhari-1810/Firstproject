@@ -56,6 +56,13 @@ COPY --from=deps  /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/prisma ./prisma
 
+# type-graphql writes /app/src/graphql/schema.gql whenever IS_PROD is false
+# (which is the case here because we run with NODE_ENV=development so that
+# session cookies work over plain HTTP). Pre-create the dir and hand the
+# whole app tree to the non-root `node` user so it can write there.
+RUN mkdir -p /app/src/graphql \
+    && chown -R node:node /app
+
 USER node
 
 EXPOSE 4000
