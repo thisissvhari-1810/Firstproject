@@ -1,0 +1,18 @@
+query post($id: String!) {
+  post(id: $id) {
+    id
+    createdAt
+    imageUrl
+    caption
+    author {
+      ...UserInfo
+    }
+    saved
+    liked
+    likeCount
+    comments {
+      ...CommentInfo
+    }
+    commentCount
+  }
+}

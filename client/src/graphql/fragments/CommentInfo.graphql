@@ -1,0 +1,11 @@
+fragment CommentInfo on Comment {
+  id
+  text
+  author {
+    ...UserInfo
+  }
+  liked
+  likeCount
+  createdAt
+  updatedAt
+}
