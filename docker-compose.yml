@@ -1,0 +1,101 @@
+# Brings up the full stack on a single Docker network:
+#   postgres  -> persistent DB
+#   redis     -> session store
+#   server    -> Apollo/Express API (port 4000)
+#   client    -> Next.js UI       (port 3000)
+#
+# Quickstart on the VM:
+#   1. cp .env.example .env  &&  edit .env to set your VM IP + COOKIE_SECRET
+#   2. docker compose up -d --build
+#   3. (one-time) docker compose run --rm server yarn prisma db seed
+#
+# All variables are read from the .env file at the repo root.
+
+services:
+  postgres:
+    image: postgres:14-alpine
+    container_name: quickpics-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-quickpics}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-quickpics}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    networks:
+      - quickpics
+
+  redis:
+    image: redis:7-alpine
+    container_name: quickpics-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    networks:
+      - quickpics
+
+  server:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    image: quickpics-server:latest
+    container_name: quickpics-server
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      # IMPORTANT: keep this `development` when accessing over plain HTTP.
+      # When NODE_ENV=production, express-session sets `secure: true` cookies
+      # which browsers silently drop on http:// origins -> login appears to
+      # succeed but you stay logged out.
+      NODE_ENV: ${SERVER_NODE_ENV:-development}
+      PORT: 4000
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-quickpics}
+      REDIS_URL: redis://redis:6379
+      COOKIE_SECRET: ${COOKIE_SECRET:?Set COOKIE_SECRET in .env}
+      CORS_ORIGIN: ${CORS_ORIGIN:?Set CORS_ORIGIN in .env (e.g. http://YOUR_VM_IP:3000)}
+    ports:
+      - "4000:4000"
+    networks:
+      - quickpics
+
+  client:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+      args:
+        # next.config.js inlines process.env.API_URL into the client bundle at
+        # BUILD time, so the browser-side fetch must already know the URL.
+        # If you change API_URL, rebuild with `docker compose build client`.
+        API_URL: ${API_URL:?Set API_URL in .env (e.g. http://YOUR_VM_IP:4000/graphql)}
+    image: quickpics-client:latest
+    container_name: quickpics-client
+    restart: unless-stopped
+    depends_on:
+      - server
+    ports:
+      - "3000:3000"
+    networks:
+      - quickpics
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  quickpics:
+    driver: bridge
