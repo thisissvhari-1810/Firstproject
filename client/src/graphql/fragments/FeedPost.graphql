@@ -1,0 +1,20 @@
+fragment FeedPost on Post {
+  id
+  createdAt
+  imageUrl
+  caption
+  author {
+    ...UserInfo
+  }
+  saved
+  liked
+  likeCount
+  commentsPreview {
+    id
+    text
+    author {
+      username
+    }
+  }
+  commentCount
+}

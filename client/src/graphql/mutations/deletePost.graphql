@@ -1,0 +1,14 @@
+mutation deletePost($id: String!) {
+  deletePost(id: $id) {
+    post {
+      id
+      author {
+        username
+      }
+    }
+    errors {
+      field
+      message
+    }
+  }
+}
